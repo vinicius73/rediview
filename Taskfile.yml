@@ -184,7 +184,7 @@ tasks:
     dir: '{{.DIR_SRC}}'
     cmds:
       - echo "Generating {{.BIN_NAME}}"
-      - "{{.EXTRA_ENVS}} go build {{.BUILDFLAGS}} {{.LDFLAGS}} -o {{.DIR_DIST}}/{{.BIN_NAME}} ./server"
+      - "{{.EXTRA_ENVS}} go build {{.BUILDFLAGS}} {{.LDFLAGS}} -o {{.DIR_DIST}}/{{.BIN_NAME}} ./cli"
       - chmod +x {{.DIR_DIST}}/{{.BIN_NAME}}
     vars:
       GOARCH: '{{default "amd64" .GOARCH}}'

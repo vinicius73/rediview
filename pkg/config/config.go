@@ -1,5 +1,9 @@
 package config
 
+import "context"
+
+type ctxKey struct{}
+
 type Config struct {
 	version   string
 	commit    string
@@ -16,6 +20,16 @@ func Build() Config {
 	}
 }
 
+func Ctx(ctx context.Context) Config {
+	val, ok := ctx.Value(ctxKey{}).(Config)
+
+	if ok {
+		return val
+	}
+
+	return Config{}
+}
+
 func (c Config) Version() string {
 	return c.version
 }
@@ -30,4 +44,8 @@ func (c Config) BuildDate() string {
 
 func (c Config) AppStage() string {
 	return c.appStage
+}
+
+func (c Config) WithContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKey{}, c)
 }
