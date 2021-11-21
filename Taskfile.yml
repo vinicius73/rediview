@@ -1,0 +1,208 @@
+# https://taskfile.dev
+
+version: '3'
+
+vars:
+  APP_NAME: rediview
+  MOD_NAME: github.com/vinicius73/rediview
+  DIR_BASE:
+    sh: pwd
+  DIR_SRC:
+    sh: "echo $(pwd)"
+  DIR_DIST:
+    sh: "echo $(pwd)/bin"
+  APP_VERSION: 0.1.0-beta
+  BUILD_DATE: '{{now | date "2006-01-02T15:04:05"}}'
+  CONFIG_PKG: github.com/vinicius73/rediview/pkg/config
+  DIR_BIN:
+    sh: "echo $HOME/bin"
+  GIT_HASH:
+    sh: git log -n 1 --format=%h || echo ''
+
+env:
+  APP_STAGE: dev
+
+dotenv: ['.env.{{.APP_STAGE}}.local', '.env.{{.APP_STAGE}}', '.env']
+
+tasks:
+  default:
+    summary: |
+      Prepare your local development
+      Install all dependencies and build project
+    deps:
+      - setup
+      - clean
+    cmds:
+      - task: info:vars
+      - task: check
+      - task: build
+    silent: true
+
+  info:vars:
+    cmds:
+      - >
+        echo APP_STAGE={{.APP_STAGE}};
+        echo APP_VERSION={{.APP_VERSION}};
+        echo BUILD_DATE={{.BUILD_DATE}};
+        echo GIT_HASH={{.GIT_HASH}};
+
+  install:
+    desc: Install dependencies
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - go get ./...
+      - go mod vendor
+
+  install:download:
+    desc: Download go mod dependencies
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - go mod download
+      - go mod vendor
+
+  install:golangci-lint:
+    cmds:
+      - curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.43.0
+    status:
+      - test -f $(go env GOPATH)/bin/golangci-lint
+
+  install:reviewdog:
+    desc: Installl reviewdog (https://github.com/reviewdog/reviewdog)
+    cmds:
+      - curl -sSfL https://raw.githubusercontent.com/reviewdog/reviewdog/master/install.sh | sh -s -- -b $(go env GOPATH)/bin
+      - reviewdog --version
+    status:
+      - test -f $(go env GOPATH)/bin/reviewdog
+
+  install:staticcheck:
+    desc: Install staticcheck
+    silent: true
+    cmds:
+      - |
+        download_url=$(curl -s https://api.github.com/repos/dominikh/go-tools/releases/latest | \
+        jq -r '.assets[] | select(.name | contains("'"$(uname | tr '[:upper:]' '[:lower:]')"'_amd64")) | .browser_download_url' | head -1)
+        curl -o /tmp/staticcheck_linux_amd64.tar.gz -L'#' "$download_url"
+        tar -zxf /tmp/staticcheck_linux_amd64.tar.gz -C  /tmp/
+        cp /tmp/staticcheck/staticcheck {{.DIR_BIN}}/staticcheck
+        chmod +x {{.DIR_BIN}}/staticcheck
+    status:
+      - test -f {{.DIR_BIN}}/staticcheck
+
+  setup:
+    desc: Setup project dependencies
+    silent: true
+    deps:
+      - install
+      - task: install:staticcheck
+        ignore_error: true
+      - task: install:golangci-lint
+        ignore_error: true
+    cmds:
+      - echo '#staticcheck' && staticcheck --version
+      - echo '#golangci-lint' && golangci-lint --version
+      - task: check
+        ignore_error: true
+
+  check:format:
+    desc: Format code
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - go fmt ./...
+
+  check:vet:
+    desc: Apply go vet
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - go vet ./...
+
+  check:ci:
+    desc: Apply Golang CI
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - golangci-lint run
+
+  check:bugs:
+    desc: Apply Golang CI (only bugs preset)
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - golangci-lint run --tests=0 --disable-all --no-config --presets bugs {{.CLI_ARGS}}
+
+  check:tests:
+    desc: Run Go Tests
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - go test ./...
+
+  check:tests:integration:
+    desc: Run Go Integration Tests
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - go test ./... --tags=integration
+
+  check:ci:fast:
+    desc: Apply Golang CI (fast mode)
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - golangci-lint run --fast --tests=0
+
+  check:static:
+    desc: Apply Staticcheck
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - staticcheck ./...
+
+  check:
+    desc: Check source code
+    deps:
+      - check:format
+      - check:vet
+      - check:static
+    cmds:
+      - task: check:tests
+
+  ci:
+    desc: Run check as Local CI
+    deps:
+      - check
+      - check:ci
+
+  reviewdog:
+    desc: Run reviewdog
+    summary: |
+      That task run reviewdog
+      It will be used on bitbucket pipelines
+    cmds:
+      - golangci-lint run --out-format=line-number | reviewdog -f=golangci-lint -reporter=bitbucket-code-report
+
+  clean:
+    desc: Remove old binaries
+    cmds:
+      - rm -rf {{.DIR_DIST}}/{{.APP_NAME}}-*
+
+  build:
+    desc: Build project
+    dir: '{{.DIR_SRC}}'
+    cmds:
+      - echo "Generating {{.BIN_NAME}}"
+      - "{{.EXTRA_ENVS}} go build {{.BUILDFLAGS}} {{.LDFLAGS}} -o {{.DIR_DIST}}/{{.BIN_NAME}} ./server"
+      - chmod +x {{.DIR_DIST}}/{{.BIN_NAME}}
+    vars:
+      GOARCH: '{{default "amd64" .GOARCH}}'
+      GOOS: '{{default "linux" .GOOS}}'
+      CGO_ENABLED: '{{default 0 .CGO_ENABLED}}'
+      LDFLAGS: -ldflags "-X {{.CONFIG_PKG}}.commit={{.GIT_HASH}} -X {{.CONFIG_PKG}}.version={{.APP_VERSION}} -X {{.CONFIG_PKG}}.buildDate={{.BUILD_DATE}} -X {{.CONFIG_PKG}}.appStage={{.APP_STAGE}}"
+      BIN_NAME: '{{.APP_NAME}}-{{.GOOS}}-{{.GOARCH}}{{if eq .GOOS "windows"}}.exe{{end}}'
+    env:
+      GOOS: "{{.GOOS}}"
+      GOARCH: "{{.GOARCH}}"
+      CGO_ENABLED: "{{.CGO_ENABLED}}"
+
+  build:release:
+    desc: Production optimized build
+    cmds:
+      - task: info:vars
+      - task: build
+        vars:
+          BUILDFLAGS: -a -installsuffix cgo -ldflags '-s -w -extldflags "-static"'
+          APP_STAGE: prd
+      - cd {{.DIR_DIST}} && ls -lh | tr -s ' ' | cut -d ' ' -f 5,9-

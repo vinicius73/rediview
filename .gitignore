@@ -1,0 +1,36 @@
+# Binaries for programs and plugins
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+
+# Test binary, build with `go test -c`
+*.test
+
+# Output of the go coverage tool, specifically when used with LiteIDE
+*.out
+coverage.html
+
+# misc
+.DS_Store
+.env
+cmd/server/application.yaml
+__debug_bin
+/docker/hsperfdata_appuser
+/docker/kraft-combined-logs
+node_modules/
+
+# Temporary directory
+tmp
+build/
+vendor/
+
+# Bin files
+bin/
+
+# WebStorm
+.idea/
+
+air.log
+*.s3db
