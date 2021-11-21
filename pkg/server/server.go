@@ -6,6 +6,7 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/vinicius73/rediview/pkg/support/httputil"
 	"net/http"
+	"time"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -42,5 +43,15 @@ func Start(ctx context.Context, conf Config) error {
 		httputil.JSON(w, http.StatusOK, map[string]string{"ok": "ok"})
 	})
 
-	return http.ListenAndServe(conf.Addr, r)
+	r.HandleFunc("/ws", echo)
+
+	srv := &http.Server{
+		Addr:         conf.Addr,
+		ReadTimeout:  5 * time.Second,
+		WriteTimeout: 10 * time.Second,
+		IdleTimeout:  60 * time.Second,
+		Handler:      r,
+	}
+
+	return srv.ListenAndServe()
 }
