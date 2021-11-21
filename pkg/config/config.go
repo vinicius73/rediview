@@ -49,3 +49,9 @@ func (c Config) AppStage() string {
 func (c Config) WithContext(ctx context.Context) context.Context {
 	return context.WithValue(ctx, ctxKey{}, c)
 }
+
+func (c Config) Tags() map[string]interface{} {
+	return map[string]interface{}{
+		"version": c.Version(),
+	}
+}

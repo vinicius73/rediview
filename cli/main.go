@@ -4,9 +4,12 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sort"
 
 	"github.com/urfave/cli/v2"
+	"github.com/vinicius73/rediview/cli/cmd"
 	conf "github.com/vinicius73/rediview/pkg/config"
+	"github.com/vinicius73/rediview/pkg/support"
 )
 
 func main() {
@@ -27,10 +30,20 @@ func main() {
 		Usage:   "a interface for redis",
 		Version: config.Version(),
 		Before: func(c *cli.Context) error {
+			logger := support.Logger(c.Args().First(), config.Tags())
+
 			c.Context = config.WithContext(c.Context)
+			c.Context = logger.WithContext(c.Context)
+
 			return nil
 		},
+		Commands: cli.Commands{
+			cmd.Server(config),
+		},
 	}
+
+	sort.Sort(cli.FlagsByName(app.Flags))
+	sort.Sort(cli.CommandsByName(app.Commands))
 
 	err := app.Run(os.Args)
 
